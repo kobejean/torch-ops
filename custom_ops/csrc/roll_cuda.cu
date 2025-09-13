@@ -24,26 +24,13 @@ __global__ void roll_kernel(
     
     if (idx >= n_elem) return;
     
-    // Shared memory for dimension data (loaded once per block)
-    __shared__ int64_t shared_sizes[MAX_ROLL_DIMS];
-    __shared__ int64_t shared_strides[MAX_ROLL_DIMS];
-    __shared__ int64_t shared_shifts[MAX_ROLL_DIMS];
-    
-    // Load dimension data into shared memory (only first threads in block)
-    if (threadIdx.x < n_dims) {
-        shared_sizes[threadIdx.x] = c_sizes[threadIdx.x];
-        shared_strides[threadIdx.x] = c_strides[threadIdx.x]; 
-        shared_shifts[threadIdx.x] = c_shifts[threadIdx.x];
-    }
-    __syncthreads();
-    
-    // Compute offset between input and output positions
+    // Compute offset using direct constant memory access (already cached)
     int64_t offset = 0;
     
     for (int d = 0; d < n_dims; ++d) {
-        const int64_t dim_idx = (idx / shared_strides[d]) % shared_sizes[d];
-        const int64_t shifted_idx = (dim_idx + shared_shifts[d]) % shared_sizes[d];
-        offset += (shifted_idx - dim_idx) * shared_strides[d];
+        const int64_t dim_idx = (idx / c_strides[d]) % c_sizes[d];
+        const int64_t shifted_idx = (dim_idx + c_shifts[d]) % c_sizes[d];
+        offset += (shifted_idx - dim_idx) * c_strides[d];
     }
     
     output[idx + offset] = input[idx];
