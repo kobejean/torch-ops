@@ -20,9 +20,11 @@ __global__ void mul_add_relu_kernel(
 }
 
 at::Tensor mul_add_relu_cuda(const at::Tensor& x, const at::Tensor& weight, const at::Tensor& bias) {
-    utils::check_cuda_tensors({x, weight, bias});
-    utils::check_same_size(x, weight);
-    utils::check_same_size(x, bias);
+    TORCH_CHECK(x.device().is_cuda(), "Tensor 'x' must be on CUDA");
+    TORCH_CHECK(weight.device().is_cuda(), "Tensor 'weight' must be on CUDA");
+    TORCH_CHECK(bias.device().is_cuda(), "Tensor 'bias' must be on CUDA");
+    TORCH_CHECK(x.sizes() == weight.sizes(), "Tensors 'x' and 'weight' must have the same size");
+    TORCH_CHECK(x.sizes() == bias.sizes(), "Tensors 'x' and 'bias' must have the same size");
     TORCH_CHECK(x.dtype() == at::kFloat, "All tensors must be float32");
     TORCH_CHECK(weight.dtype() == at::kFloat, "All tensors must be float32");
     TORCH_CHECK(bias.dtype() == at::kFloat, "All tensors must be float32");

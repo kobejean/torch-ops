@@ -12,7 +12,7 @@ at::Tensor square_relu_forward_cpu(const at::Tensor& input) {
 }
 
 at::Tensor square_relu_backward_cpu(const at::Tensor& grad_output, const at::Tensor& input) {
-    utils::check_same_size(grad_output, input);
+    TORCH_CHECK(grad_output.sizes() == input.sizes(), "grad_output and input must have the same size");
     TORCH_CHECK(grad_output.dtype() == at::kFloat, "grad_output must be float32");
     TORCH_CHECK(input.dtype() == at::kFloat, "input must be float32");
     TORCH_INTERNAL_ASSERT(grad_output.device().type() == at::DeviceType::CPU);

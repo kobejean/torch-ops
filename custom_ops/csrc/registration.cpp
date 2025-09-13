@@ -1,31 +1,6 @@
 #include "registration.h"
 #include <pybind11/pybind11.h>
 
-namespace custom_ops {
-namespace utils {
-
-void check_cuda_tensors(const std::vector<at::Tensor>& tensors) {
-    for (const auto& tensor : tensors) {
-        TORCH_CHECK(tensor.device().is_cuda(), "All tensors must be on CUDA");
-    }
-}
-
-void check_same_device(const std::vector<at::Tensor>& tensors) {
-    if (tensors.empty()) return;
-    
-    auto device = tensors[0].device();
-    for (const auto& tensor : tensors) {
-        TORCH_CHECK(tensor.device() == device, "All tensors must be on the same device");
-    }
-}
-
-void check_same_size(const at::Tensor& a, const at::Tensor& b) {
-    TORCH_CHECK(a.sizes() == b.sizes(), "Tensors must have the same size");
-}
-
-} // namespace utils
-} // namespace custom_ops
-
 // Register all operators
 TORCH_LIBRARY(custom_ops, m) {
     // Elementwise operations

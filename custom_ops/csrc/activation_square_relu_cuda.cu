@@ -31,7 +31,7 @@ __global__ void square_relu_backward_kernel(
 }
 
 at::Tensor square_relu_forward_cuda(const at::Tensor& input) {
-    utils::check_cuda_tensors({input});
+    TORCH_CHECK(input.device().is_cuda(), "Input tensor must be on CUDA");
     TORCH_CHECK(input.dtype() == at::kFloat, "Input must be float32");
     
     auto result = torch::empty_like(input);
@@ -53,8 +53,9 @@ at::Tensor square_relu_forward_cuda(const at::Tensor& input) {
 }
 
 at::Tensor square_relu_backward_cuda(const at::Tensor& grad_output, const at::Tensor& input) {
-    utils::check_cuda_tensors({grad_output, input});
-    utils::check_same_size(grad_output, input);
+    TORCH_CHECK(grad_output.device().is_cuda(), "grad_output tensor must be on CUDA");
+    TORCH_CHECK(input.device().is_cuda(), "input tensor must be on CUDA");
+    TORCH_CHECK(grad_output.sizes() == input.sizes(), "grad_output and input must have the same size");
     TORCH_CHECK(grad_output.dtype() == at::kFloat, "grad_output must be float32");
     TORCH_CHECK(input.dtype() == at::kFloat, "input must be float32");
     

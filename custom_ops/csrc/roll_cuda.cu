@@ -6,27 +6,44 @@
 namespace custom_ops {
 namespace tensor {
 
+// Constant memory for dimension info (much faster than global memory)
+// Max 8 dimensions should cover most use cases
+constexpr int MAX_ROLL_DIMS = 8;
+__constant__ int64_t c_sizes[MAX_ROLL_DIMS];
+__constant__ int64_t c_strides[MAX_ROLL_DIMS];
+__constant__ int64_t c_shifts[MAX_ROLL_DIMS];
+
 template <typename scalar_t>
 __global__ void roll_kernel(
     const scalar_t* __restrict__ input,
     scalar_t* __restrict__ output,
     const int64_t n_elem,
-    const int n_dims,
-    const int64_t* __restrict__ sizes,
-    const int64_t* __restrict__ strides,
-    const int64_t* __restrict__ shifts
+    const int n_dims
 ) {
     const int64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     
     if (idx >= n_elem) return;
     
+    // Shared memory for dimension data (loaded once per block)
+    __shared__ int64_t shared_sizes[MAX_ROLL_DIMS];
+    __shared__ int64_t shared_strides[MAX_ROLL_DIMS];
+    __shared__ int64_t shared_shifts[MAX_ROLL_DIMS];
+    
+    // Load dimension data into shared memory (only first threads in block)
+    if (threadIdx.x < n_dims) {
+        shared_sizes[threadIdx.x] = c_sizes[threadIdx.x];
+        shared_strides[threadIdx.x] = c_strides[threadIdx.x]; 
+        shared_shifts[threadIdx.x] = c_shifts[threadIdx.x];
+    }
+    __syncthreads();
+    
     // Compute offset between input and output positions
     int64_t offset = 0;
     
     for (int d = 0; d < n_dims; ++d) {
-        const int64_t dim_idx = (idx / strides[d]) % sizes[d];
-        const int64_t shifted_idx = (dim_idx + shifts[d]) % sizes[d];
-        offset += (shifted_idx - dim_idx) * strides[d];
+        const int64_t dim_idx = (idx / shared_strides[d]) % shared_sizes[d];
+        const int64_t shifted_idx = (dim_idx + shared_shifts[d]) % shared_sizes[d];
+        offset += (shifted_idx - dim_idx) * shared_strides[d];
     }
     
     output[idx + offset] = input[idx];
@@ -37,7 +54,7 @@ at::Tensor roll_cuda(
     at::IntArrayRef shifts,
     at::IntArrayRef dims
 ) {
-    utils::check_cuda_tensors({input});
+    TORCH_CHECK(input.device().is_cuda(), "Input tensor must be on CUDA");
     
     // Handle empty tensor
     if (input.numel() == 0) {
@@ -94,18 +111,14 @@ at::Tensor roll_cuda(
         return input.clone();
     }
     
-    // Allocate device memory for effective dimension info
-    int64_t* d_sizes;
-    int64_t* d_strides;
-    int64_t* d_shifts;
+    // Check dimension limit for constant memory
+    TORCH_CHECK(eff_dims <= MAX_ROLL_DIMS, 
+                "Too many effective dimensions (", eff_dims, ") for roll operation. Max supported: ", MAX_ROLL_DIMS);
     
-    cudaMalloc(&d_sizes, eff_dims * sizeof(int64_t));
-    cudaMalloc(&d_strides, eff_dims * sizeof(int64_t));
-    cudaMalloc(&d_shifts, eff_dims * sizeof(int64_t));
-    
-    cudaMemcpy(d_sizes, eff_sizes.data(), eff_dims * sizeof(int64_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_strides, eff_strides.data(), eff_dims * sizeof(int64_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_shifts, eff_shifts.data(), eff_dims * sizeof(int64_t), cudaMemcpyHostToDevice);
+    // Copy dimension data to constant memory (much faster than global memory)
+    cudaMemcpyToSymbol(c_sizes, eff_sizes.data(), eff_dims * sizeof(int64_t));
+    cudaMemcpyToSymbol(c_strides, eff_strides.data(), eff_dims * sizeof(int64_t));
+    cudaMemcpyToSymbol(c_shifts, eff_shifts.data(), eff_dims * sizeof(int64_t));
     
     // Create output tensor
     auto output = torch::empty_like(input);
@@ -120,17 +133,9 @@ at::Tensor roll_cuda(
             input.data_ptr<scalar_t>(),
             output.data_ptr<scalar_t>(),
             num_elements,
-            eff_dims,
-            d_sizes,
-            d_strides,
-            d_shifts
+            eff_dims
         );
     });
-    
-    // Clean up
-    cudaFree(d_sizes);
-    cudaFree(d_strides);
-    cudaFree(d_shifts);
     
     // Check for CUDA errors
     cudaError_t error = cudaGetLastError();

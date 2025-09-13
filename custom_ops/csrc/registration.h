@@ -31,11 +31,4 @@ namespace tensor {
     at::Tensor roll_cuda(const at::Tensor& input, at::IntArrayRef shifts, at::IntArrayRef dims);
 }
 
-// Utility functions
-namespace utils {
-    void check_cuda_tensors(const std::vector<at::Tensor>& tensors);
-    void check_same_device(const std::vector<at::Tensor>& tensors);
-    void check_same_size(const at::Tensor& a, const at::Tensor& b);
-}
-
 } // namespace custom_ops
