@@ -10,22 +10,22 @@ template <typename scalar_t>
 __global__ void roll_kernel(
     const scalar_t* __restrict__ input,
     scalar_t* __restrict__ output,
-    const int64_t num_elements,
-    const int effective_dims,
-    const int* __restrict__ sizes,
-    const int* __restrict__ strides,
-    const int* __restrict__ shifts
+    const int64_t n_elem,
+    const int n_dims,
+    const int64_t* __restrict__ sizes,
+    const int64_t* __restrict__ strides,
+    const int64_t* __restrict__ shifts
 ) {
     const int64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
     
-    if (idx >= num_elements) return;
+    if (idx >= n_elem) return;
     
     // Compute offset between input and output positions
     int64_t offset = 0;
     
-    for (int d = 0; d < effective_dims; ++d) {
-        const int dim_idx = (idx / strides[d]) % sizes[d];
-        const int shifted_idx = (dim_idx + shifts[d]) % sizes[d];
+    for (int d = 0; d < n_dims; ++d) {
+        const int64_t dim_idx = (idx / strides[d]) % sizes[d];
+        const int64_t shifted_idx = (dim_idx + shifts[d]) % sizes[d];
         offset += (shifted_idx - dim_idx) * strides[d];
     }
     
@@ -50,7 +50,7 @@ at::Tensor roll_cuda(
                 "shifts and dims must have the same length");
     
     // Create a map of dimension to shift amount
-    std::vector<int> shift_amounts(ndim, 0);
+    std::vector<int64_t> shift_amounts(ndim, 0);
     for (size_t i = 0; i < dims.size(); ++i) {
         int64_t dim = dims[i];
         // Handle negative dims
@@ -69,43 +69,43 @@ at::Tensor roll_cuda(
     auto sizes = input.sizes();
     auto strides = input.strides();
     
-    std::vector<int> effective_sizes;
-    std::vector<int> effective_strides;
-    std::vector<int> effective_shifts;
+    std::vector<int64_t> eff_sizes;
+    std::vector<int64_t> eff_strides;
+    std::vector<int64_t> eff_shifts;
     
-    for (int d = 0; d < ndim; ++d) {
+    for (int64_t d = 0; d < ndim; ++d) {
         if (sizes[d] > 0) {
             // Convert negative shifts to positive equivalents
-            int normalized_shift = ((shift_amounts[d] % sizes[d]) + sizes[d]) % sizes[d];
+            int64_t normalized_shift = ((shift_amounts[d] % sizes[d]) + sizes[d]) % sizes[d];
             
             // Only include dimensions with non-zero shifts
             if (normalized_shift != 0) {
-                effective_sizes.push_back(sizes[d]);
-                effective_strides.push_back(strides[d]);
-                effective_shifts.push_back(normalized_shift);
+                eff_sizes.push_back(sizes[d]);
+                eff_strides.push_back(strides[d]);
+                eff_shifts.push_back(normalized_shift);
             }
         }
     }
     
-    const int effective_dims = effective_sizes.size();
+    const int eff_dims = eff_sizes.size();
     
     // Early exit if no dimensions need shifting
-    if (effective_dims == 0) {
+    if (eff_dims == 0) {
         return input.clone();
     }
     
     // Allocate device memory for effective dimension info
-    int* d_sizes;
-    int* d_strides;
-    int* d_shifts;
+    int64_t* d_sizes;
+    int64_t* d_strides;
+    int64_t* d_shifts;
     
-    cudaMalloc(&d_sizes, effective_dims * sizeof(int));
-    cudaMalloc(&d_strides, effective_dims * sizeof(int));
-    cudaMalloc(&d_shifts, effective_dims * sizeof(int));
+    cudaMalloc(&d_sizes, eff_dims * sizeof(int64_t));
+    cudaMalloc(&d_strides, eff_dims * sizeof(int64_t));
+    cudaMalloc(&d_shifts, eff_dims * sizeof(int64_t));
     
-    cudaMemcpy(d_sizes, effective_sizes.data(), effective_dims * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_strides, effective_strides.data(), effective_dims * sizeof(int), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_shifts, effective_shifts.data(), effective_dims * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_sizes, eff_sizes.data(), eff_dims * sizeof(int64_t), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_strides, eff_strides.data(), eff_dims * sizeof(int64_t), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_shifts, eff_shifts.data(), eff_dims * sizeof(int64_t), cudaMemcpyHostToDevice);
     
     // Create output tensor
     auto output = torch::empty_like(input);
@@ -120,7 +120,7 @@ at::Tensor roll_cuda(
             input.data_ptr<scalar_t>(),
             output.data_ptr<scalar_t>(),
             num_elements,
-            effective_dims,
+            eff_dims,
             d_sizes,
             d_strides,
             d_shifts

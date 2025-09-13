@@ -6,6 +6,7 @@ elementwise_multiply = torch.ops.custom_ops.elementwise_multiply.default
 activation_square_relu_forward = torch.ops.custom_ops.activation_square_relu_forward.default
 activation_square_relu_backward = torch.ops.custom_ops.activation_square_relu_backward.default
 fused_mul_add_relu = torch.ops.custom_ops.fused_mul_add_relu.default
+tensor_roll = torch.ops.custom_ops.tensor_roll.default
 
 # torch.compile support
 @torch.library.register_fake("custom_ops::elementwise_multiply")
@@ -33,6 +34,13 @@ def _(x, weight, bias):
     torch._check(x.shape == bias.shape, "x and bias must have same shape")
     torch._check(x.dtype == torch.float, "All tensors must be float32")
     return torch.empty_like(x)
+
+@torch.library.register_fake("custom_ops::tensor_roll")
+def _(input, shifts, dims):
+    torch._check(len(shifts) == len(dims), "shifts and dims must have same length")
+    for dim in dims:
+        torch._check(dim >= -input.ndim and dim < input.ndim, f"dim {dim} out of range")
+    return torch.empty_like(input)
 
 # Autograd support for SquareReLU
 def _square_relu_backward_fn(ctx, grad):
@@ -86,6 +94,10 @@ def fused_linear_relu(x, weight, bias):
     """Fused linear transformation with ReLU: relu(x * weight + bias)"""
     return fused_mul_add_relu(x, weight, bias)
 
+def roll(input, shifts, dims):
+    """Roll tensor elements along specified dimensions"""
+    return tensor_roll(input, shifts, dims)
+
 # Testing and utilities
 def test_all_operators():
     """Test all operators for correctness"""
@@ -115,6 +127,12 @@ def test_all_operators():
     unfused_result = torch.relu(x * weight + bias)
     print(f"✓ Fused mul-add-relu: {torch.allclose(fused_result, unfused_result)}")
     
+    # Test roll operation
+    x_roll = torch.arange(12, device=device, dtype=torch.float32).reshape(3, 4)
+    roll_result = roll(x_roll, [1, 2], [0, 1])
+    roll_expected = torch.roll(x_roll, [1, 2], [0, 1])
+    print(f"✓ Roll operation: {torch.allclose(roll_result, roll_expected)}")
+    
     # Test opcheck
     try:
         torch.library.opcheck(elementwise_multiply, [a[:10], b[:10]])
@@ -128,7 +146,8 @@ def test_all_operators():
 __version__ = "1.0.0"
 __all__ = [
     "elementwise_multiply", "multiply",
-    "activation_square_relu_forward", "square_relu",
+    "activation_square_relu_forward", "square_relu", 
     "fused_mul_add_relu", "fused_linear_relu",
+    "tensor_roll", "roll",
     "test_all_operators"
 ]
