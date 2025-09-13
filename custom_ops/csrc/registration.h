@@ -25,6 +25,12 @@ namespace fused {
     at::Tensor mul_add_relu_cuda(const at::Tensor& x, const at::Tensor& weight, const at::Tensor& bias);
 }
 
+// Tensor operations
+namespace tensor {
+    at::Tensor roll_cpu(const at::Tensor& input, at::IntArrayRef shifts, at::IntArrayRef dims);
+    at::Tensor roll_cuda(const at::Tensor& input, at::IntArrayRef shifts, at::IntArrayRef dims);
+}
+
 // Utility functions
 namespace utils {
     void check_cuda_tensors(const std::vector<at::Tensor>& tensors);
