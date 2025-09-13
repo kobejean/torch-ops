@@ -6,7 +6,7 @@
 namespace custom_ops {
 namespace tensor {
 
-// Constant memory for dimension info (much faster than global memory)
+// Constant memory for dimension info
 // Max 8 dimensions should cover most use cases
 constexpr int MAX_ROLL_DIMS = 8;
 __constant__ int64_t c_sizes[MAX_ROLL_DIMS];
@@ -20,20 +20,20 @@ __global__ void roll_kernel(
     const int64_t n_elem,
     const int n_dims
 ) {
-    const int64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    const int64_t flat_idx = blockIdx.x * blockDim.x + threadIdx.x;
     
-    if (idx >= n_elem) return;
+    if (flat_idx >= n_elem) return;
     
-    // Compute offset using direct constant memory access (already cached)
     int64_t offset = 0;
     
+    #pragma unroll
     for (int d = 0; d < n_dims; ++d) {
-        const int64_t dim_idx = (idx / c_strides[d]) % c_sizes[d];
-        const int64_t shifted_idx = (dim_idx + c_shifts[d]) % c_sizes[d];
-        offset += (shifted_idx - dim_idx) * c_strides[d];
+        const int64_t old_idx = (flat_idx / c_strides[d]) % c_sizes[d];
+        const int64_t new_idx = (old_idx + c_shifts[d]) % c_sizes[d];
+        offset += (new_idx - old_idx) * c_strides[d];
     }
     
-    output[idx + offset] = input[idx];
+    output[flat_idx + offset] = input[flat_idx];
 }
 
 at::Tensor roll_cuda(
