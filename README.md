@@ -26,7 +26,6 @@ Benchmarked on Tesla T4 GPU with comprehensive testing:
 
 **Key insights:**
 - Achieves **1.29× speedup** on large tensors (100M elements)
-- Maintains **perfect correctness** with zero numerical difference vs PyTorch
 - Reaches **41.2 GB/s memory bandwidth** utilization
 - **100% theoretical GPU occupancy** demonstrates optimal kernel configuration
 

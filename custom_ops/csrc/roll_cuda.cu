@@ -26,7 +26,6 @@ __global__ void roll_kernel(
     
     int64_t offset = 0;
     
-    #pragma unroll
     for (int d = 0; d < n_dims; ++d) {
         const int64_t old_idx = (flat_idx / c_strides[d]) % c_sizes[d];
         const int64_t new_idx = (old_idx + c_shifts[d]) % c_sizes[d];
