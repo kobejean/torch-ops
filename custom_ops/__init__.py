@@ -91,12 +91,13 @@ torch.library.register_autograd(
 
 # Autograd support for tensor roll
 def _tensor_roll_backward_fn(ctx, grad_output):
-    shifts, dims = ctx.saved_variables
+    shifts, dims = ctx.shifts, ctx.dims
     return tensor_roll_backward(grad_output, shifts, dims), None, None
 
 def _tensor_roll_setup_context(ctx, inputs, output):
     input, shifts, dims = inputs
-    ctx.saved_variables = (shifts, dims)
+    ctx.shifts = shifts
+    ctx.dims = dims
 
 torch.library.register_autograd(
     "custom_ops::tensor_roll",
