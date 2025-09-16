@@ -29,6 +29,8 @@ namespace fused {
 namespace tensor {
     at::Tensor roll_cpu(const at::Tensor& input, at::IntArrayRef shifts, at::IntArrayRef dims);
     at::Tensor roll_cuda(const at::Tensor& input, at::IntArrayRef shifts, at::IntArrayRef dims);
+    at::Tensor roll_backward_cpu(const at::Tensor& grad_output, at::IntArrayRef shifts, at::IntArrayRef dims);
+    at::Tensor roll_backward_cuda(const at::Tensor& grad_output, at::IntArrayRef shifts, at::IntArrayRef dims);
 }
 
 } // namespace custom_ops

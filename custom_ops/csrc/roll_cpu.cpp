@@ -38,4 +38,20 @@ at::Tensor roll_cpu(
     return at::roll(input, shifts, dims);
 }
 
+at::Tensor roll_backward_cpu(
+    const at::Tensor& grad_output,
+    at::IntArrayRef shifts,
+    at::IntArrayRef dims
+) {
+    // For backward pass, we just need to roll in the opposite direction
+    // Create negated shifts
+    std::vector<int64_t> backward_shifts;
+    backward_shifts.reserve(shifts.size());
+    for (const auto shift : shifts) {
+        backward_shifts.push_back(-shift);
+    }
+
+    return roll_cpu(grad_output, backward_shifts, dims);
+}
+
 }} // namespace custom_ops::tensor

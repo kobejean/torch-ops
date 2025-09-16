@@ -15,6 +15,7 @@ TORCH_LIBRARY(custom_ops, m) {
     
     // Tensor operations
     m.def("tensor_roll(Tensor input, int[] shifts, int[] dims) -> Tensor");
+    m.def("tensor_roll_backward(Tensor grad_output, int[] shifts, int[] dims) -> Tensor");
 }
 
 // Register CPU implementations
@@ -24,6 +25,7 @@ TORCH_LIBRARY_IMPL(custom_ops, CPU, m) {
     m.impl("activation_square_relu_backward", &custom_ops::activation::square_relu_backward_cpu);
     m.impl("fused_mul_add_relu", &custom_ops::fused::mul_add_relu_cpu);
     m.impl("tensor_roll", &custom_ops::tensor::roll_cpu);
+    m.impl("tensor_roll_backward", &custom_ops::tensor::roll_backward_cpu);
 }
 
 // Register CUDA implementations
@@ -33,6 +35,7 @@ TORCH_LIBRARY_IMPL(custom_ops, CUDA, m) {
     m.impl("activation_square_relu_backward", &custom_ops::activation::square_relu_backward_cuda);
     m.impl("fused_mul_add_relu", &custom_ops::fused::mul_add_relu_cuda);
     m.impl("tensor_roll", &custom_ops::tensor::roll_cuda);
+    m.impl("tensor_roll_backward", &custom_ops::tensor::roll_backward_cuda);
 }
 
 // Python module creation

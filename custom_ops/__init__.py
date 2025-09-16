@@ -7,6 +7,7 @@ activation_square_relu_forward = torch.ops.custom_ops.activation_square_relu_for
 activation_square_relu_backward = torch.ops.custom_ops.activation_square_relu_backward.default
 fused_mul_add_relu = torch.ops.custom_ops.fused_mul_add_relu.default
 tensor_roll = torch.ops.custom_ops.tensor_roll.default
+tensor_roll_backward = torch.ops.custom_ops.tensor_roll_backward.default
 
 # torch.compile support
 @torch.library.register_fake("custom_ops::elementwise_multiply")
@@ -41,6 +42,13 @@ def _(input, shifts, dims):
     for dim in dims:
         torch._check(dim >= -input.ndim and dim < input.ndim, f"dim {dim} out of range")
     return torch.empty_like(input)
+
+@torch.library.register_fake("custom_ops::tensor_roll_backward")
+def _(grad_output, shifts, dims):
+    torch._check(len(shifts) == len(dims), "shifts and dims must have same length")
+    for dim in dims:
+        torch._check(dim >= -grad_output.ndim and dim < grad_output.ndim, f"dim {dim} out of range")
+    return torch.empty_like(grad_output)
 
 # Autograd support for SquareReLU
 def _square_relu_backward_fn(ctx, grad):
@@ -79,6 +87,21 @@ torch.library.register_autograd(
     "custom_ops::fused_mul_add_relu",
     _fused_mul_add_relu_backward_fn,
     setup_context=_fused_mul_add_relu_setup_context
+)
+
+# Autograd support for tensor roll
+def _tensor_roll_backward_fn(ctx, grad_output):
+    shifts, dims = ctx.saved_variables
+    return tensor_roll_backward(grad_output, shifts, dims), None, None
+
+def _tensor_roll_setup_context(ctx, inputs, output):
+    input, shifts, dims = inputs
+    ctx.saved_variables = (shifts, dims)
+
+torch.library.register_autograd(
+    "custom_ops::tensor_roll",
+    _tensor_roll_backward_fn,
+    setup_context=_tensor_roll_setup_context
 )
 
 # Convenient wrapper functions
@@ -127,11 +150,15 @@ def test_all_operators():
     unfused_result = torch.relu(x * weight + bias)
     print(f"✓ Fused mul-add-relu: {torch.allclose(fused_result, unfused_result)}")
     
-    # Test roll operation
-    x_roll = torch.arange(12, device=device, dtype=torch.float32).reshape(3, 4)
+    # Test roll operation with gradients
+    x_roll = torch.arange(12, device=device, dtype=torch.float32, requires_grad=True).reshape(3, 4)
     roll_result = roll(x_roll, [1, 2], [0, 1])
-    roll_expected = torch.roll(x_roll, [1, 2], [0, 1])
-    print(f"✓ Roll operation: {torch.allclose(roll_result, roll_expected)}")
+    roll_expected = torch.roll(x_roll.detach(), [1, 2], [0, 1])
+    print(f"✓ Roll operation forward: {torch.allclose(roll_result, roll_expected)}")
+
+    # Test backward pass
+    roll_result.sum().backward()
+    print(f"✓ Roll operation backward: {x_roll.grad is not None and torch.allclose(x_roll.grad, torch.ones_like(x_roll))}")
     
     # Test opcheck
     try:
